@@ -1,0 +1,9 @@
+# docker-compose.yml
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: devpassword
+      POSTGRES_DB: notesdb
+    ports:
+      - "5432:5432"

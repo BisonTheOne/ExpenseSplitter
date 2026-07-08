@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Tickets</title>
+  <style>
+    body { font-family: sans-serif; max-width: 600px; margin: 40px auto; }
+    #tickets div { padding: 8px; border-bottom: 1px solid #ddd; }
+    input, button { padding: 6px; margin-right: 6px; margin-bottom: 8px; }
+    #app { display: none; }
+    #error { color: red; }
+  </style>
+</head>
+<body>
+  <div id="auth">
+    <h2>Login</h2>
+    <input id="email" placeholder="Email">
+    <input id="password" placeholder="Password" type="password">
+    <button onclick="login()">Log in</button>
+    <button onclick="signup()">Sign up</button>
+    <div id="error"></div>
+  </div>
+
+  <div id="app">
+    <h1>Tickets</h1>
+    <button onclick="logout()">Log out</button>
+    <div>
+      <input id="title" placeholder="Title">
+      <input id="body" placeholder="Body">
+      <button onclick="createTicket()">Add</button>
+    </div>
+    <div id="tickets"></div>
+  </div>
+
+  <script>
+    let token = null;
+
+    async function signup() {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const res = await fetch('/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        document.getElementById('error').textContent = JSON.stringify(err.error);
+        return;
+      }
+      document.getElementById('error').textContent = 'Signed up — now log in.';
+    }
+
+    async function login() {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const res = await fetch('/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      if (!res.ok) {
+        document.getElementById('error').textContent = 'Login failed';
+        return;
+      }
+      const data = await res.json();
+      token = data.token;
+      document.getElementById('auth').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      loadTickets();
+    }
+
+    function logout() {
+      token = null;
+      document.getElementById('app').style.display = 'none';
+      document.getElementById('auth').style.display = 'block';
+    }
+
+   async function loadTickets() {
+  const res = await fetch('/tickets', {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    document.getElementById('tickets').innerHTML = `Error: ${JSON.stringify(err)}`;
+    return;
+  }
+  const tickets = await res.json();
+  document.getElementById('tickets').innerHTML = tickets
+    .map(t => `<div>${t.title}: ${t.body}</div>`)
+    .join('');
+}
+
+    async function createTicket() {
+      const title = document.getElementById('title').value;
+      const body = document.getElementById('body').value;
+      await fetch('/tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ title, body })
+      });
+      console.log(`${body}`);
+      body.innerHTML = "Body";
+      title.innerHTML = "Title";
+      loadTickets();
+    }
+  </script>
+</body>
+</html>

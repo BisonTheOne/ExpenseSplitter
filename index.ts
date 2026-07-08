@@ -14,6 +14,7 @@ interface AuthRequest extends Request {
 
 const app = Express();
 app.use(Express.json());
+app.use(Express.static('public'));
 
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -47,20 +48,16 @@ const adapter = new PrismaPg({
 
 const prisma = new PrismaClient({ adapter });
 
-app.get('/',(req,res)=>{
-res.send("Hello world!!");
-});
-
-app.get('/tickets', requireAuth, async (req, res) => {
-  const tickets = await prisma.ticket.findMany();
-  res.json(tickets);
-});
 
 app.post('/tickets', requireAuth, async(req,res)=>{
     const tickets = await prisma.ticket.create({data: req.body});
     res.status(201).json(tickets)
 });
 
+app.get('/tickets', requireAuth, async(req, res)=>{
+    const tickets = await prisma.ticket.findMany();
+    return res.json(tickets);
+});
 
 
 const signupSchema = z.object({

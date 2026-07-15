@@ -146,31 +146,6 @@ app.post('/groups/:groupId/members', requireAuth, async(req:AuthRequest, res) =>
     }
 });
 
-app.post('/tickets', requireAuth, async(req,res)=>{
-    const tickets = await prisma.ticket.create({data: req.body});
-    res.status(201).json(tickets)
-});
-
-app.get('/tickets', requireAuth, async(req, res)=>{
-    const tickets = await prisma.ticket.findMany();
-    return res.json(tickets);
-});
-
-app.delete('/tickets/:id', requireAuth, async(req, res)=>{
-    const id = Number(req.params.id);
-    await prisma.ticket.delete({where: {id}});
-    res.status(204).send();
-});
-
-app.patch('/tickets/:id', requireAuth, async(req, res)=>{
-    const id = Number(req.params.id);
-    const ticket = await prisma.ticket.update({
-        where: {id},
-        data: req.body,
-    });
-    res.json(ticket);
-});
-
 app.post('/groups', requireAuth, async (req:AuthRequest,res) => {
     const parsed = createGroupSchema.safeParse(req.body);
 

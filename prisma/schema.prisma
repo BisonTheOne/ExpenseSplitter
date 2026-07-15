@@ -20,7 +20,50 @@ model Ticket {
 }
 
 model User {
-  id        Int     @id @default(autoincrement())
-  email     String  @unique
-  password  String 
+  id            Int     @id @default(autoincrement())
+  email         String  @unique
+  password      String 
+
+  groupMemberships    GroupMember[]
+  expensesPaid        Expense[]
+  expenseShares       ExpenseParticipant[]
+}
+
+model Group {
+  id        Int           @id @default(autoincrement())
+  name      String
+  createdAt DateTime      @default(now())
+  members   GroupMember[]
+  expenses  Expense[]
+}
+
+model GroupMember {
+  id      Int   @id @default(autoincrement())
+  group   Group @relation(fields: [groupId], references: [id])
+  groupId Int
+  user    User  @relation(fields: [userId], references: [id])
+  userId  Int
+
+  @@unique([groupId, userId]) // prevents the same user joining a group twice
+}
+
+model Expense {
+  id           Int                  @id @default(autoincrement())
+  description  String
+  amount       Float
+  group        Group                @relation(fields: [groupId], references: [id])
+  groupId      Int
+  paidBy       User                 @relation(fields: [paidById], references: [id])
+  paidById     Int
+  createdAt    DateTime             @default(now())
+  participants ExpenseParticipant[]
+}
+
+model ExpenseParticipant {
+  id         Int     @id @default(autoincrement())
+  expense    Expense @relation(fields: [expenseId], references: [id])
+  expenseId  Int
+  user       User    @relation(fields: [userId], references: [id])
+  userId     Int
+  shareOwed  Float
 }

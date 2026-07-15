@@ -26,14 +26,14 @@
     <div>
       <input id="title" placeholder="Title">
       <input id="body" placeholder="Body">
-      <button onclick="createTicket()">Add</button>
+      <button id="addBtn" onclick="saveTicket()">Add</button>
     </div>
     <div id="tickets"></div>
   </div>
 
   <script>
     let token = null;
-
+    let editId = null;
     async function signup() {
       const email = document.getElementById('email').value;
       const password = document.getElementById('password').value;
@@ -85,9 +85,22 @@
     return;
   }
   const tickets = await res.json();
-  document.getElementById('tickets').innerHTML = tickets
-    .map(t => `<div>${t.title}: ${t.body}</div>`)
-    .join('');
+  const container = document.getElementById('tickets');
+  container.innerHTML='';
+  tickets.forEach(t => {
+    const div = document.createElement('div');
+    const text = document.createElement('span');
+    text.textContent=`${t.title}: ${t.body}`;
+    const editBtn = document.createElement('button');
+    editBtn.textContent = 'Edit';
+    const delBtn = document.createElement('button');
+    delBtn.textContent = 'Delete';
+    editBtn.addEventListener('click', () => startEdit(t.id, t.title, t.body));
+    delBtn.addEventListener('click', () => deleteTicket(t.id));
+    div.append(text, editBtn, delBtn);
+    container.appendChild(div);
+
+  }); 
 }
 
     async function createTicket() {
@@ -103,6 +116,48 @@
       title.innerHTML = "Title";
       loadTickets();
     }
+
+    async function deleteTicket(id) {
+      await fetch (`/tickets/${id}`, {
+        method: 'DELETE',
+        headers: {Authorization: `Bearer ${token}` } 
+      });
+      loadTickets();
+    }
+
+    async function startEdit(id, title, body) {
+      editId=id;
+      document.getElementById('title').value=title;
+      document.getElementById('body').value=body;
+      document.getElementById('addBtn').textContent = 'Save';
+    }
+
+    async function saveTicket() {
+      const title = document.getElementById('title').value;
+      const body = document.getElementById('body').value;
+      
+      if (editId){
+        await fetch (`tickets/${editId}`,
+        {
+          method: 'PATCH', 
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`},
+          body: JSON.stringify({title,body})
+      });
+      editId = null;
+      document.getElementById('addBtn').textContent='Add';
+      }else{
+        await fetch ('/tickets', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json', Authorization: `Bearer: ${token}`},
+          body: JSON.stringify({title, body})
+        });
+      }
+
+      document.getElementById('title').value='';
+      document.getElementById('body').value='';
+      loadTickets();
+    }
+
   </script>
 </body>
 </html>

@@ -42,7 +42,39 @@ function requireAuth(req: AuthRequest, res: Response, next: NextFunction){
     }
 }
 
+interface Balance { userId: number; amount: number; }
 
+function simplifyDebts(balances: Record<number, number>): { from: number; to: number; amount: number }[] {
+  const creditors: Balance[] = [];
+  const debtors: Balance[] = [];
+
+  for (const [userId, amount] of Object.entries(balances)) {
+    if (amount > 0.01) creditors.push({ userId: Number(userId), amount });
+    else if (amount < -0.01) debtors.push({ userId: Number(userId), amount: -amount }); 
+  }
+
+  creditors.sort((a, b) => b.amount - a.amount);
+  debtors.sort((a, b) => b.amount - a.amount);
+
+  const transactions: { from: number; to: number; amount: number }[] = [];
+  let i = 0, j = 0;
+
+  while (i < debtors.length && j < creditors.length) {
+    const debtor = debtors[i]!;
+    const creditor = creditors[j]!;
+    const amount = Math.min(debtor.amount, creditor.amount);
+
+    transactions.push({ from: debtor.userId, to: creditor.userId, amount: Math.round(amount * 100) / 100 });
+
+    debtor.amount -= amount;
+    creditor.amount -= amount;
+
+    if (debtor.amount < 0.01) i++;   
+    if (creditor.amount < 0.01) j++; 
+  }
+
+  return transactions;
+}
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -66,6 +98,57 @@ const createExpenseSchema = z.object({
     splits: z
         .array(z.object({userId: z.number(), value: z.number() }))
         .optional(),
+});
+
+
+async function getGroupBalance(groupId:number){
+    const expenses = await prisma.expense.findMany({
+        where: {groupId},
+        include: {participants: true},
+    });
+
+    const balances: Record<number,number> = {};
+
+    for (const expense of expenses){
+        balances[expense.paidById]=(balances[expense.paidById] ?? 0) + expense.amount;
+        for (const participant of expense.participants){
+            balances[participant.userId]= (balances[participant.userId] ?? 0) - participant.shareOwed;
+        }
+    }
+
+    return balances;
+
+}
+
+app.get('/groups/:groupId/balances', requireAuth, async (req:AuthRequest,res) => {
+    const groupId = Number(req.params.groupId);
+
+    const membership = await prisma.groupMember.findUnique({where:
+        {groupId_userId: {groupId, userId: req.userId!}},
+    });
+
+    if(!membership){
+        return res.status(403).json({error: 'You are not a member of this group' });
+    }
+
+    const balances = await getGroupBalance(groupId);
+    res.json(balances);
+});
+
+app.get('/groups/:groupId/settle-up', requireAuth, async (req: AuthRequest, res) => {
+  const groupId = Number(req.params.groupId);
+
+  const membership = await prisma.groupMember.findUnique({
+    where: { groupId_userId: { groupId, userId: req.userId! } },
+  });
+  if (!membership) {
+    return res.status(403).json({ error: 'You are not a member of this group' });
+  }
+
+  const balances = await getGroupBalance(groupId);
+  const transactions = simplifyDebts(balances);
+
+  res.json(transactions);
 });
 
 function splitEqually(amount: number, memberCount: number): number[] {
@@ -163,7 +246,7 @@ app.post('/groups', requireAuth, async (req:AuthRequest,res) => {
             }
         }
     });
-    res.status(201).json({group});
+    res.status(201).json(group);
 });
 
 app.post('/expenses', requireAuth, async (req:AuthRequest,res) => {
@@ -281,6 +364,11 @@ app.post('/login', async(req,res) =>{
             );
 
     res.json({token});
+});
+
+app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+  console.error(err);
+  res.status(500).json({ error: err.message });
 });
 
 export default app;

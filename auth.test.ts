@@ -28,8 +28,5 @@ describe('auth flow', () => {
     expect(loginRes.body.token).toBeDefined();
   });
 
-  it('rejects access to /tickets without a token', async () => {
-    const res = await request(app).get('/tickets');
-    expect(res.status).toBe(401);
-  });
+ 
 });

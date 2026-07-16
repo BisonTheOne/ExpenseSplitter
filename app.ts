@@ -68,6 +68,41 @@ const createExpenseSchema = z.object({
         .optional(),
 });
 
+
+async function getGroupBalance(groupId:number){
+    const expenses = await prisma.expense.findMany({
+        where: {groupId},
+        include: {participants: true},
+    });
+
+    const balances: Record<number,number> = {};
+
+    for (const expense of expenses){
+        balances[expense.paidById]=(balances[expense.paidById] ?? 0) + expense.amount;
+        for (const participant of expense.participants){
+            balances[participant.userId]= (balances[participant.userId] ?? 0) - participant.shareOwed;
+        }
+    }
+
+    return balances;
+
+}
+
+app.get('/groups/:groupId/balances', requireAuth, async (req:AuthRequest,res) => {
+    const groupId = Number(req.params.groupId);
+
+    const membership = await prisma.groupMember.findUnique({where:
+        {groupId_userId: {groupId, userId: req.userId!}},
+    });
+
+    if(!membership){
+        return res.status(403).json({error: 'You are not a member of this group' });
+    }
+
+    const balances = await getGroupBalance(groupId);
+    res.json(balances);
+});
+
 function splitEqually(amount: number, memberCount: number): number[] {
   const cents = Math.round(amount * 100);
   const baseShare = Math.floor(cents / memberCount);
@@ -163,7 +198,7 @@ app.post('/groups', requireAuth, async (req:AuthRequest,res) => {
             }
         }
     });
-    res.status(201).json({group});
+    res.status(201).json(group);
 });
 
 app.post('/expenses', requireAuth, async (req:AuthRequest,res) => {
@@ -281,6 +316,11 @@ app.post('/login', async(req,res) =>{
             );
 
     res.json({token});
+});
+
+app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+  console.error(err);
+  res.status(500).json({ error: err.message });
 });
 
 export default app;

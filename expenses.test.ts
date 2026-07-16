@@ -66,6 +66,77 @@ describe('expense balances', () => {
     expect(total).toBeCloseTo(0, 2);
   });
 
+  it('produces settle-up transactions that resolve all balances', async () => {
+    const suffix = Date.now();
+    const alexEmail = `alex2-${suffix}@test.com`;
+    const samEmail = `sam2-${suffix}@test.com`;
+    const jordanEmail = `jordan2-${suffix}@test.com`;
+
+    const alexToken = await signupAndLogin(alexEmail);
+    const samToken = await signupAndLogin(samEmail);
+    const jordanToken = await signupAndLogin(jordanEmail);
+
+    const groupRes = await request(app)
+      .post('/groups')
+      .set('Authorization', `Bearer ${alexToken}`)
+      .send({ name: 'Settle Test' });
+    expect(groupRes.status).toBe(201);
+    const groupId = groupRes.body.id;
+
+    const addSam = await request(app)
+      .post(`/groups/${groupId}/members`)
+      .set('Authorization', `Bearer ${alexToken}`)
+      .send({ email: samEmail });
+    expect(addSam.status).toBe(201);
+
+    const addJordan = await request(app)
+      .post(`/groups/${groupId}/members`)
+      .set('Authorization', `Bearer ${alexToken}`)
+      .send({ email: jordanEmail });
+    expect(addJordan.status).toBe(201);
+
+    const expA = await request(app)
+      .post('/expenses')
+      .set('Authorization', `Bearer ${alexToken}`)
+      .send({ description: 'Dinner', amount: 30, groupId, splitType: 'equal' });
+    expect(expA.status).toBe(201);
+
+    const expB = await request(app)
+      .post('/expenses')
+      .set('Authorization', `Bearer ${samToken}`)
+      .send({ description: 'Groceries', amount: 15, groupId, splitType: 'equal' });
+    expect(expB.status).toBe(201);
+
+    const expC = await request(app)
+      .post('/expenses')
+      .set('Authorization', `Bearer ${jordanToken}`)
+      .send({ description: 'Coffee', amount: 9, groupId, splitType: 'equal' });
+    expect(expC.status).toBe(201);
+
+    const settleRes = await request(app)
+      .get(`/groups/${groupId}/settle-up`)
+      .set('Authorization', `Bearer ${alexToken}`);
+
+    expect(settleRes.status).toBe(200);
+
+    const transactions = settleRes.body as { from: number; to: number; amount: number }[];
+
+    // Apply every transaction back onto the original balances — the result should be all zeros
+    const balancesRes = await request(app)
+      .get(`/groups/${groupId}/balances`)
+      .set('Authorization', `Bearer ${alexToken}`);
+    const balances = { ...balancesRes.body };
+
+    for (const t of transactions) {
+      balances[t.from] += t.amount;
+      balances[t.to] -= t.amount;
+    }
+
+    for (const remaining of Object.values(balances)) {
+      expect(remaining as number).toBeCloseTo(0, 2);
+    }
+});
+
   it('rejects balance requests from non-members', async () => {
     const suffix = Date.now();
     const ownerToken = await signupAndLogin(`owner-${suffix}@test.com`);
